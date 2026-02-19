@@ -18,16 +18,23 @@ const Roadmap: React.FC = () => {
   const [checkinMessage, setCheckinMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
   useEffect(() => {
-    // 1. Get Quiz Data
+    // 1. Get Quiz Data Safely (Step 4)
     const storedAnswers = localStorage.getItem('quiz_answers');
     if (!storedAnswers) {
       navigate('/quiz');
       return;
     }
 
-    const parsedAnswers: QuizState = JSON.parse(storedAnswers);
-    setQuizState(parsedAnswers);
-    setRoadmap(generateRoadmapData(parsedAnswers));
+    try {
+      const parsedAnswers: QuizState = JSON.parse(storedAnswers);
+      setQuizState(parsedAnswers);
+      const generatedRoadmap = generateRoadmapData(parsedAnswers);
+      setRoadmap(generatedRoadmap);
+    } catch (error) {
+      console.error('Failed to parse answers or generate roadmap:', error);
+      navigate('/quiz');
+      return;
+    }
 
     // 2. Get User & Progress
     const fetchUserAndProgress = async () => {
@@ -56,8 +63,12 @@ const Roadmap: React.FC = () => {
             setCompletedItems(dbProgress);
           }
         } else {
-          // Fallback to LocalStorage if not logged in
-          throw new Error("No session");
+           // Fallback to LocalStorage if not logged in
+           // (Usually handled by catch block, but explicit check here for clarity)
+           const localProgress = localStorage.getItem('roadmap_progress');
+           if (localProgress) {
+             setCompletedItems(JSON.parse(localProgress));
+           }
         }
       } catch (err) {
         // Fallback to LocalStorage on error (NetworkError or No Session)

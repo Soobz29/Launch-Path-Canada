@@ -95,36 +95,48 @@ const Quiz: React.FC = () => {
       setIsLoading(true);
       setError(null);
 
+      // Logging for debugging as requested
+      console.log('Supabase URL:', (import.meta as any).env?.VITE_SUPABASE_URL);
+      console.log('Quiz answers:', answers);
+
       try {
         // Simulating processing delay
         await new Promise(resolve => setTimeout(resolve, 1500));
 
-        // Save to Supabase if logged in
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user) {
-          const { error: dbError } = await supabase
-            .from('users_profiles')
-            .upsert({
-              id: session.user.id,
-              visa_type: answers.status,
-              province: answers.province,
-              income_bracket: answers.income,
-              bank_account_status: answers.bankAccount,
-              credit_goal: answers.goal,
-              updated_at: new Date()
-            });
-            
-          if (dbError) throw dbError;
-        }
-
-        // Save to LocalStorage (always, as fallback and for Roadmap page to read immediately)
+        // Save to LocalStorage immediately (Critical for offline/resilience)
         localStorage.setItem('quiz_answers', JSON.stringify(answers));
 
+        // Attempt to save to Supabase, but catch any errors so they don't block the user
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          console.log('User session:', session);
+          
+          if (session?.user) {
+            const { error: dbError } = await supabase
+              .from('users_profiles')
+              .upsert({
+                id: session.user.id,
+                visa_type: answers.status,
+                province: answers.province,
+                income_bracket: answers.income,
+                bank_account_status: answers.bankAccount,
+                credit_goal: answers.goal,
+                updated_at: new Date()
+              });
+              
+            if (dbError) {
+              console.warn("Background save to Supabase failed (non-blocking):", dbError);
+            }
+          }
+        } catch (dbEx) {
+           console.warn("Background save error (non-blocking):", dbEx);
+        }
+
+        // Navigate regardless of DB success/failure
         navigate('/roadmap');
       } catch (err: any) {
-        console.error(err);
-        setError("Failed to generate roadmap. Please check your connection and try again.");
+        console.error("Critical error in quiz submission:", err);
+        setError("Failed to generate roadmap. Please try again.");
       } finally {
         setIsLoading(false);
       }
@@ -225,7 +237,7 @@ const Quiz: React.FC = () => {
         </div>
       </div>
       
-      {/* Inline styles for shake animation because tailwind default doesn't have it exactly like this */}
+      {/* Inline styles for shake animation */}
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
