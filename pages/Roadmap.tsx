@@ -277,22 +277,21 @@ const Roadmap: React.FC = () => {
                 ref={(el) => { monthRefs.current[month.monthNumber] = el; }}
                 className={`
                     rounded-xl border transition-all duration-300 relative overflow-hidden
-                    ${isLocked ? 'bg-slate-50 border-slate-200 opacity-75' : 'bg-white shadow-sm'}
+                    ${isLocked ? 'bg-slate-50 border-slate-200' : 'bg-white shadow-sm'}
                     ${isActive ? 'border-canada-red ring-1 ring-canada-red ring-opacity-50 shadow-md transform scale-[1.01]' : ''}
                     ${isComplete ? 'border-green-200' : ''}
                 `}
               >
                 {/* Header */}
                 <div className={`
-                    px-6 py-4 flex justify-between items-center
+                    px-6 py-4 flex justify-between items-center transition-colors duration-300
                     ${isLocked ? 'bg-slate-100 text-slate-400' : ''}
                     ${isActive ? 'bg-slate-900 text-white' : ''}
                     ${isComplete ? 'bg-green-700 text-white' : ''}
-                    ${!isLocked && !isActive && !isComplete ? 'bg-slate-900 text-white' : ''} 
                 `}>
                     <div className="flex items-center">
                         <span className="font-bold text-lg mr-3">Month {month.monthNumber}</span>
-                        {isLocked && <Lock className="h-5 w-5" />}
+                        {isLocked && <Lock className="h-5 w-5 opacity-70" />}
                     </div>
                     {isComplete && (
                         <div className="flex items-center bg-white/20 px-2 py-1 rounded text-xs font-bold uppercase">
@@ -302,12 +301,12 @@ const Roadmap: React.FC = () => {
                 </div>
 
                 {/* Content */}
-                <div className="p-6">
-                    <h3 className={`text-xl font-bold mb-4 ${isLocked ? 'text-slate-400' : 'text-slate-800'}`}>
+                <div className="p-6 relative">
+                    <h3 className={`text-xl font-bold mb-4 transition-all duration-300 ${isLocked ? 'blur-md text-slate-400 select-none' : 'text-slate-800'}`}>
                         {month.title}
                     </h3>
                     
-                    <div className="space-y-3">
+                    <div className={`space-y-3 transition-all duration-300 ${isLocked ? 'blur-md select-none pointer-events-none opacity-50' : ''}`}>
                         {month.actions.map((action, idx) => {
                             const isChecked = !!completedItems[action.id];
                             return (
@@ -316,16 +315,16 @@ const Roadmap: React.FC = () => {
                                     onClick={() => toggleItem(month.monthNumber, idx, action.id)}
                                     className={`
                                         flex items-start p-3 rounded-lg transition-all
-                                        ${isLocked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-slate-50'}
+                                        ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50'}
                                         ${isChecked ? 'bg-green-50' : ''}
                                     `}
                                 >
                                     <div className={`mt-0.5 mr-3 flex-shrink-0 transition-colors ${
-                                        isChecked ? 'text-green-600' : isLocked ? 'text-slate-300' : 'text-slate-300 group-hover:text-slate-400'
+                                        isChecked ? 'text-green-600' : 'text-slate-300 group-hover:text-slate-400'
                                     }`}>
                                         {isChecked ? <CheckSquare className="h-6 w-6" /> : <Square className="h-6 w-6" />}
                                     </div>
-                                    <span className={`text-base ${isChecked ? 'text-slate-500 line-through' : isLocked ? 'text-slate-400' : 'text-slate-700'}`}>
+                                    <span className={`text-base ${isChecked ? 'text-slate-500 line-through' : 'text-slate-700'}`}>
                                         {action.text}
                                     </span>
                                 </div>
@@ -334,15 +333,22 @@ const Roadmap: React.FC = () => {
                     </div>
 
                     {isLocked && (
-                        <div className="mt-4 flex items-center text-sm text-slate-500 bg-slate-100 p-3 rounded">
-                            <Lock className="h-4 w-4 mr-2" />
-                            Complete Month {month.monthNumber - 1} to unlock this step.
+                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center top-14">
+                           <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-lg border border-slate-100 flex flex-col items-center text-center max-w-[80%]">
+                              <div className="bg-slate-100 p-3 rounded-full mb-3">
+                                <Lock className="h-6 w-6 text-slate-500" />
+                              </div>
+                              <h4 className="font-bold text-slate-800 mb-1">Step Locked</h4>
+                              <p className="text-sm text-slate-500">
+                                Complete Month {month.monthNumber - 1} to unlock this step.
+                              </p>
+                           </div>
                         </div>
                     )}
                 </div>
                 
                 {isActive && (
-                    <div className="absolute inset-0 pointer-events-none border-2 border-canada-red/20 rounded-xl animate-pulse"></div>
+                    <div className="absolute inset-0 pointer-events-none border-2 border-canada-red/40 rounded-xl animate-pulse"></div>
                 )}
               </div>
             );
