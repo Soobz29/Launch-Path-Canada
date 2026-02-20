@@ -24,12 +24,15 @@ jobs:
           docker push soobz/launch-path-canada:${{ github.sha }}
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
       - name: Set up gcloud
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install GKE auth plugin
+        run: gcloud components install gke-gcloud-auth-plugin --quiet
 
       - name: Connect to GKE cluster
         run: |
