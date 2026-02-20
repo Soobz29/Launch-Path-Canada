@@ -21,10 +21,8 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          docker build \
-            --build-arg VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }} \
-            --build-arg VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }} \
-            -t soobz/launch-path-canada:${{ github.sha }} .
+          # Build without baking Supabase keys
+          docker build -t soobz/launch-path-canada:${{ github.sha }} .
           docker push soobz/launch-path-canada:${{ github.sha }}
 
       - name: Authenticate to Google Cloud
