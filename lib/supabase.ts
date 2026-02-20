@@ -1,13 +1,31 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+// Helper to safely access env vars in various environments (Vite, CRA, or direct ESM)
+const getEnvVar = (key: string, fallback: string) => {
+  try {
+    // Try import.meta.env (Vite)
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+      // @ts-ignore
+      return import.meta.env[key];
+    }
+    // Try process.env (Node/CRA/Webpack)
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      // @ts-ignore
+      return process.env[key];
+    }
+  } catch (e) {
+    // Ignore errors
+  }
+  return fallback;
+};
 
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder'
-);
+const supabaseUrl = getEnvVar('VITE_SUPABASE_URL', getEnvVar('REACT_APP_SUPABASE_URL', 'https://placeholder.supabase.co'));
+const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY', getEnvVar('REACT_APP_SUPABASE_ANON_KEY', 'placeholder'));
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export const isSupabaseConfigured = () => {
-  return !!supabaseUrl && !!supabaseAnonKey && supabaseUrl !== 'https://placeholder.supabase.co';
+  return supabaseUrl !== 'https://placeholder.supabase.co';
 };

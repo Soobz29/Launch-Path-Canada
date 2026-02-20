@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canada-red: #FF0000;
+  --color-canada-dark: #CC0000;
+}
