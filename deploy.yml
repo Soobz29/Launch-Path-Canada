@@ -3,6 +3,7 @@ name: Build and Deploy to GKE
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -20,16 +21,22 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          docker build -t soobz/launch-path-canada:${{ github.sha }} .
+          docker build \
+            --build-arg VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }} \
+            --build-arg VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }} \
+            -t soobz/launch-path-canada:${{ github.sha }} .
           docker push soobz/launch-path-canada:${{ github.sha }}
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
       - name: Set up gcloud
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install GKE auth plugin
+        run: gcloud components install gke-gcloud-auth-plugin --quiet
 
       - name: Connect to GKE cluster
         run: |
@@ -40,12 +47,4 @@ jobs:
           kubectl set image deployment/launch-path-canada launch-path-canada=soobz/launch-path-canada:${{ github.sha }}
 
       - name: Verify deployment
-
         run: kubectl rollout status deployment/launch-path-canada
-        - name: Debug env vars
-        run: |
-          echo "Supabase URL length: ${#VITE_SUPABASE_URL}"
-          echo "Anon key length: ${#VITE_SUPABASE_ANON_KEY}"
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
