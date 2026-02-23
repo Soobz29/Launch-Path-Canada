@@ -1,8 +1,43 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import Button from '../components/ui/Button';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, ArrowRight } from 'lucide-react';
+
+const formStyle: React.CSSProperties = {
+  minHeight: '100vh', display: 'flex', alignItems: 'center',
+  justifyContent: 'center', padding: '2rem 1rem',
+  background: '#0F0F0F',
+};
+
+const cardStyle: React.CSSProperties = {
+  background: '#141414', border: '1px solid rgba(255,255,255,0.06)',
+  borderRadius: 20, padding: '2.5rem', width: '100%', maxWidth: 440,
+};
+
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: '0.8rem', fontWeight: 500,
+  color: '#888', marginBottom: '0.5rem', letterSpacing: '0.05em', textTransform: 'uppercase',
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '0.875rem 1rem',
+  background: 'rgba(255,255,255,0.03)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  borderRadius: 10, color: '#FAF7F2',
+  fontFamily: "'DM Sans', sans-serif", fontSize: '0.95rem',
+  outline: 'none', transition: 'border-color 0.2s ease',
+  boxSizing: 'border-box',
+};
+
+const submitStyle: React.CSSProperties = {
+  width: '100%', padding: '0.9rem',
+  background: '#C8102E', color: 'white',
+  border: 'none', borderRadius: 10,
+  fontFamily: "'DM Sans', sans-serif",
+  fontSize: '0.95rem', fontWeight: 500,
+  cursor: 'pointer', transition: 'background 0.2s ease',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+};
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -12,132 +47,81 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
-
-  // If user came from a protected route, or roadmap save click
-  const from = location.state?.from?.pathname || '/dashboard';
+  const from = (location.state as any)?.from?.pathname || '/dashboard';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    // Basic Validation
-    if (!email.includes('@')) {
-      setError("Please enter a valid email address.");
-      setLoading(false);
-      return;
-    }
-
+    setLoading(true); setError(null);
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
-
-      // Sync local roadmap data to DB if logging in for first time?
-      // For now, simpler: just redirect.
       navigate(from, { replace: true });
     } catch (err: any) {
-      if (err.message.includes("Invalid login")) {
-        setError("Incorrect email or password. Please try again.");
-      } else {
-        setError(err.message || "Something went wrong. Please try again.");
-      }
-    } finally {
-      setLoading(false);
-    }
+      setError(err.message?.includes('Invalid login') ? 'Incorrect email or password.' : err.message || 'Something went wrong.');
+    } finally { setLoading(false); }
   };
 
   const handleForgotPassword = async () => {
-    if (!email) {
-      setError("Please enter your email address to reset your password.");
-      return;
-    }
+    if (!email) { setError('Enter your email above first.'); return; }
     setLoading(true);
     try {
-        // Safe origin check for sandboxed environments
-        let origin = 'https://launchpathcanada.com';
-        if (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null') {
-           origin = window.location.origin;
-        }
-
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: origin + '/reset-password', 
-        });
-        if (error) throw error;
-        setResetSent(true);
-        setError(null);
-    } catch (err: any) {
-        setError(err.message);
-    } finally {
-        setLoading(false);
-    }
+      const origin = window.location?.origin !== 'null' ? window.location.origin : 'https://launchpathcanada.ca';
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${origin}/reset-password` });
+      if (error) throw error;
+      setResetSent(true); setError(null);
+    } catch (err: any) { setError(err.message); }
+    finally { setLoading(false); }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center text-slate-900">Log In</h2>
-        
+    <div style={formStyle}>
+      <div style={cardStyle}>
+        <div style={{ marginBottom: '2rem' }}>
+          <p style={{ fontSize: '0.75rem', color: '#C8102E', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Welcome back</p>
+          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: '2rem', fontWeight: 700 }}>Log In</h1>
+        </div>
+
         {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg flex items-start">
-            <AlertTriangle className="h-5 w-5 mr-2 flex-shrink-0" />
-            <span>{error}</span>
+          <div style={{ marginBottom: '1.25rem', padding: '0.875rem 1rem', background: 'rgba(200,16,46,0.08)', border: '1px solid rgba(200,16,46,0.2)', borderRadius: 10, display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+            <AlertTriangle size={16} color="#C8102E" style={{ marginTop: 2, flexShrink: 0 }} />
+            <span style={{ fontSize: '0.875rem', color: '#FAF7F2' }}>{error}</span>
           </div>
         )}
 
         {resetSent && (
-             <div className="mb-4 p-3 bg-green-50 text-green-700 text-sm rounded-lg flex items-start">
-                <CheckCircle className="h-5 w-5 mr-2 flex-shrink-0" />
-                <span>Password reset email sent. Check your inbox.</span>
-             </div>
+          <div style={{ marginBottom: '1.25rem', padding: '0.875rem 1rem', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, display: 'flex', gap: '0.75rem' }}>
+            <CheckCircle size={16} color="#22c55e" style={{ marginTop: 2, flexShrink: 0 }} />
+            <span style={{ fontSize: '0.875rem', color: '#FAF7F2' }}>Reset link sent — check your inbox.</span>
+          </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-            <input 
-              type="email" 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-canada-red outline-none"
-              required
-            />
+            <label style={labelStyle}>Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} required />
           </div>
-          
           <div>
-            <div className="flex justify-between mb-1">
-                <label className="block text-sm font-medium text-slate-700">Password</label>
-                <button type="button" onClick={handleForgotPassword} className="text-xs text-canada-red hover:underline">
-                    Forgot password?
-                </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <label style={{ ...labelStyle, marginBottom: 0 }}>Password</label>
+              <button type="button" onClick={handleForgotPassword} style={{ background: 'none', border: 'none', color: '#C8102E', fontSize: '0.75rem', cursor: 'pointer', padding: 0 }}>
+                Forgot password?
+              </button>
             </div>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-canada-red outline-none"
-              required
-            />
-            <p className="text-xs text-slate-500 mt-1">Must be at least 8 characters</p>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} required />
           </div>
-
-          <Button type="submit" isLoading={loading} className="w-full h-12">
-            Log In
-          </Button>
+          <button type="submit" disabled={loading} style={{ ...submitStyle, opacity: loading ? 0.6 : 1 }}>
+            {loading ? 'Logging in...' : <>Log In <ArrowRight size={16} /></>}
+          </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-slate-600">
+        <p style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.875rem', color: '#555' }}>
           Don't have an account?{' '}
-          <Link to="/signup" className="text-canada-red font-medium hover:underline">
-            Sign up
-          </Link>
+          <Link to="/signup" style={{ color: '#C8102E', textDecoration: 'none', fontWeight: 500 }}>Sign up</Link>
         </p>
       </div>
     </div>
   );
 };
 
+export { Login };
 export default Login;
