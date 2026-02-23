@@ -3,18 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { QuizState, RoadmapType } from '../types';
 import { generateRoadmapData } from '../utils/roadmapData';
-import Button from '../components/ui/Button';
-import { 
-  CheckSquare, 
-  Square, 
-  Download, 
-  Save, 
-  AlertTriangle, 
-  Lock, 
-  Check, 
-  ChevronRight, 
-  BellRing 
-} from 'lucide-react';
+import { CheckSquare, Square, Download, Save, Lock, Check, ChevronRight } from 'lucide-react';
+
+const S = {
+  page: { background: '#0F0F0F', minHeight: '100vh', color: '#FAF7F2', fontFamily: "'DM Sans', sans-serif", paddingBottom: '5rem' } as React.CSSProperties,
+  container: { maxWidth: 760, margin: '0 auto', padding: '0 1.5rem' } as React.CSSProperties,
+};
 
 const Roadmap: React.FC = () => {
   const navigate = useNavigate();
@@ -22,394 +16,248 @@ const Roadmap: React.FC = () => {
   const [roadmap, setRoadmap] = useState<RoadmapType>([]);
   const [completedItems, setCompletedItems] = useState<Record<string, boolean>>({});
   const [user, setUser] = useState<any>(null);
-  
-  // Celebration State
-  const [celebration, setCelebration] = useState<{ show: boolean, month: number } | null>(null);
+  const [celebration, setCelebration] = useState<{ show: boolean; month: number } | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
-
-  // Refs for scrolling
   const monthRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
-
-  // Derived state for progress bar
   const [totalSteps, setTotalSteps] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
 
-  // Initial data load
   useEffect(() => {
-    const storedAnswers = localStorage.getItem('quiz_answers');
-    if (!storedAnswers) {
-      navigate('/quiz');
-      return;
-    }
-
+    const stored = localStorage.getItem('quizAnswers') || localStorage.getItem('quiz_answers');
+    if (!stored) { navigate('/quiz'); return; }
     try {
-      const parsedAnswers: QuizState = JSON.parse(storedAnswers);
-      setQuizState(parsedAnswers);
-      const generatedRoadmap = generateRoadmapData(parsedAnswers);
-      setRoadmap(generatedRoadmap);
-      
-      // Calculate total steps
-      const total = generatedRoadmap.reduce((acc, month) => acc + month.actions.length, 0);
-      setTotalSteps(total);
+      const parsed: QuizState = JSON.parse(stored);
+      setQuizState(parsed);
+      const generated = generateRoadmapData(parsed);
+      setRoadmap(generated);
+      setTotalSteps(generated.reduce((a, m) => a + m.actions.length, 0));
+    } catch { navigate('/quiz'); return; }
 
-    } catch (error) {
-      console.error('Failed to parse answers or generate roadmap:', error);
-      navigate('/quiz');
-      return;
-    }
-
-    const fetchUserAndProgress = async () => {
+    const fetchProgress = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setUser(session?.user ?? null);
-
         if (session?.user) {
-          const { data: checklistData } = await supabase
-            .from('checklist_progress')
-            .select('id, month_number, item_index, completed')
-            .eq('user_id', session.user.id);
-          
-          if (checklistData) {
-            const dbProgress: Record<string, boolean> = {};
-            checklistData.forEach((row: any) => {
-              const derivedId = `m${row.month_number}-a${row.item_index + 1}`;
-              if (row.completed) dbProgress[derivedId] = true;
-            });
-            setCompletedItems(dbProgress);
+          const { data } = await supabase.from('checklist_progress').select('*').eq('user_id', session.user.id);
+          if (data) {
+            const p: Record<string, boolean> = {};
+            data.forEach((r: any) => { if (r.completed) p[`m${r.month_number}-a${r.item_index + 1}`] = true; });
+            setCompletedItems(p);
           }
         } else {
-           const localProgress = localStorage.getItem('roadmap_progress');
-           if (localProgress) {
-             setCompletedItems(JSON.parse(localProgress));
-           }
+          const local = localStorage.getItem('roadmap_progress');
+          if (local) setCompletedItems(JSON.parse(local));
         }
-      } catch (err) {
-        const localProgress = localStorage.getItem('roadmap_progress');
-        if (localProgress) {
-           setCompletedItems(JSON.parse(localProgress) || {});
-        }
+      } catch {
+        const local = localStorage.getItem('roadmap_progress');
+        if (local) setCompletedItems(JSON.parse(local) || {});
       }
     };
-
-    fetchUserAndProgress();
+    fetchProgress();
   }, [navigate]);
 
-  // Update progress count whenever completedItems changes
   useEffect(() => {
-    if (roadmap.length > 0) {
-      let count = 0;
-      roadmap.forEach(month => {
-        month.actions.forEach(action => {
-          if (completedItems[action.id]) count++;
-        });
-      });
-      setCompletedCount(count);
+    if (roadmap.length) {
+      let c = 0;
+      roadmap.forEach(m => m.actions.forEach(a => { if (completedItems[a.id]) c++; }));
+      setCompletedCount(c);
     }
   }, [completedItems, roadmap]);
 
-  // Handle Celebration Overlay Timeout
   useEffect(() => {
     if (celebration?.show) {
       setShowCelebration(true);
-      const timer = setTimeout(() => {
-        handleDismissCelebration();
-      }, 5000);
-      return () => clearTimeout(timer);
-    } else {
-      setShowCelebration(false);
-    }
+      const t = setTimeout(handleDismiss, 5000);
+      return () => clearTimeout(t);
+    } else setShowCelebration(false);
   }, [celebration]);
 
-  const isMonthComplete = (month: any, currentCompletedItems: Record<string, boolean>) => {
-    return month.actions.every((action: any) => currentCompletedItems[action.id]);
-  };
+  const isComplete = (month: any, items: Record<string, boolean>) => month.actions.every((a: any) => items[a.id]);
+  const isLocked = (idx: number) => idx !== 0 && !isComplete(roadmap[idx - 1], completedItems);
 
-  const isMonthLocked = (monthIndex: number) => {
-    if (monthIndex === 0) return false;
-    // Locked if previous month is NOT complete
-    const prevMonth = roadmap[monthIndex - 1];
-    return !isMonthComplete(prevMonth, completedItems);
-  };
-
-  const handleDismissCelebration = () => {
+  const handleDismiss = () => {
     if (!celebration) return;
-    
-    const nextMonthNum = celebration.month + 1;
+    const next = celebration.month + 1;
     setShowCelebration(false);
     setTimeout(() => {
-        setCelebration(null);
-        if (nextMonthNum <= 6) {
-            monthRefs.current[nextMonthNum]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else {
-            navigate('/dashboard');
-        }
-    }, 300); // Wait for fade out
+      setCelebration(null);
+      if (next <= 6) monthRefs.current[next]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      else navigate('/dashboard');
+    }, 300);
   };
 
   const toggleItem = async (monthNum: number, actionIndex: number, actionId: string) => {
-    // Prevent toggling if month is locked
-    const monthIndex = monthNum - 1;
-    if (isMonthLocked(monthIndex)) return;
+    if (isLocked(monthNum - 1)) return;
+    const checked = !completedItems[actionId];
+    const newP = { ...completedItems, [actionId]: checked };
+    setCompletedItems(newP);
 
-    const isNowChecked = !completedItems[actionId];
-    const newProgress = { ...completedItems, [actionId]: isNowChecked };
-    setCompletedItems(newProgress);
-
-    // Save Logic
     if (user) {
       try {
-        if (isNowChecked) {
-            await supabase.from('checklist_progress').insert({
-                user_id: user.id,
-                month_number: monthNum,
-                item_index: actionIndex,
-                completed: true,
-                completed_at: new Date()
-            });
-        } else {
-            await supabase.from('checklist_progress')
-                .delete()
-                .eq('user_id', user.id)
-                .eq('month_number', monthNum)
-                .eq('item_index', actionIndex);
-        }
-      } catch (err) {
-        console.error("Failed to sync progress", err);
-      }
+        if (checked) await supabase.from('checklist_progress').insert({ user_id: user.id, month_number: monthNum, item_index: actionIndex, completed: true, completed_at: new Date() });
+        else await supabase.from('checklist_progress').delete().eq('user_id', user.id).eq('month_number', monthNum).eq('item_index', actionIndex);
+      } catch {}
     }
-    // Always save to local storage as backup
-    localStorage.setItem('roadmap_progress', JSON.stringify(newProgress));
+    localStorage.setItem('roadmap_progress', JSON.stringify(newP));
 
-    // Check for Month Completion Celebration
-    if (isNowChecked) {
-        const month = roadmap[monthIndex];
-        const wasComplete = isMonthComplete(month, completedItems);
-        const isComplete = isMonthComplete(month, newProgress);
-
-        if (!wasComplete && isComplete) {
-            // Trigger celebration
-            setCelebration({ show: true, month: monthNum });
-            
-            // If logged in, update profile for email reminders
-            if (user && monthNum < 6) {
-                try {
-                    // We record that the NEXT month is now unlocked
-                    await supabase.from('users_profiles').upsert({
-                        id: user.id,
-                        updated_at: new Date(),
-                        // Assuming the column exists as requested in the prompt
-                        next_month_unlocked_at: new Date().toISOString()
-                    });
-                } catch (e) {
-                    console.warn("Could not update unlock timestamp", e);
-                }
-            }
-        }
+    if (checked) {
+      const month = roadmap[monthNum - 1];
+      if (!isComplete(month, completedItems) && isComplete(month, newP)) setCelebration({ show: true, month: monthNum });
     }
   };
 
-  const getCelebrationText = (monthNum: number) => {
-    switch (monthNum) {
-      case 1: return "Your foundation is set. Your credit journey has officially started.";
-      case 2: return "Your first credit account is open. This is the hardest step — you did it.";
-      case 3: return "You're building a payment history. Lenders are starting to see you.";
-      case 4: return "You now have a credit file at both bureaus. Big milestone.";
-      case 5: return "Two tradelines active. Your score is climbing.";
-      case 6: return "6 months done. Check your score — you've earned it.";
-      default: return "Step complete! Keep going.";
-    }
+  const celebrationText: Record<number, string> = {
+    1: "Your foundation is set. Your credit journey has officially started.",
+    2: "Your first credit account is open. This is the hardest step — you did it.",
+    3: "You're building a payment history. Lenders are starting to see you.",
+    4: "You now have a credit file at both bureaus. Big milestone.",
+    5: "Two tradelines active. Your score is climbing.",
+    6: "6 months done. Check your score — you've earned it.",
   };
 
   if (!quizState) return null;
-
-  const progressPercentage = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0;
+  const pct = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0;
 
   return (
-    <div className="bg-slate-50 min-h-screen pb-20 relative">
-      {/* Not Logged In Banner */}
+    <div style={S.page}>
+
+      {/* NOT LOGGED IN BANNER */}
       {!user && (
-        <div className="bg-slate-900 text-white px-4 py-3 text-center text-sm md:flex md:justify-center md:items-center">
-          <span className="mr-2">You are not logged in. Your progress is saved on this device only.</span>
-          <button 
-            onClick={() => navigate('/signup')} 
-            className="underline font-bold hover:text-canada-red transition-colors ml-1"
-          >
-            Create an account to save it permanently.
+        <div style={{ background: '#141414', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '0.75rem 1.5rem', textAlign: 'center', fontSize: '0.85rem', color: '#666' }}>
+          Progress is saved on this device only.{' '}
+          <button onClick={() => navigate('/signup')} style={{ background: 'none', border: 'none', color: '#C8102E', cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+            Create an account to save it permanently
           </button>
         </div>
       )}
 
-      {/* Sticky Progress Header */}
-      <div className="sticky top-16 z-30 bg-white border-b border-slate-200 shadow-sm">
-        <div className="container mx-auto px-4 py-4 max-w-4xl">
-           <div className="flex justify-between items-center mb-2">
-             <span className="text-sm font-bold text-slate-700">Your Progress</span>
-             <span className="text-sm font-bold text-canada-red">{completedCount} of {totalSteps} steps — {progressPercentage}%</span>
-           </div>
-           <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
-             <div 
-               className="bg-canada-red h-3 rounded-full transition-all duration-500 ease-out"
-               style={{ width: `${progressPercentage}%` }}
-             ></div>
-           </div>
+      {/* STICKY PROGRESS */}
+      <div style={{ position: 'sticky', top: 64, zIndex: 30, background: 'rgba(15,15,15,0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '1rem 1.5rem' }}>
+        <div style={{ maxWidth: 760, margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 500, color: '#666' }}>Progress</span>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#C8102E' }}>{completedCount} / {totalSteps} — {pct}%</span>
+          </div>
+          <div style={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ height: '100%', background: '#C8102E', borderRadius: 2, width: `${pct}%`, transition: 'width 0.5s ease' }} />
+          </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">Your 6-Month Roadmap</h1>
-            <p className="text-slate-600">
-                Follow this plan step-by-step. Do not rush. Consistency is key.
-            </p>
+      <div style={S.container}>
+        <div style={{ padding: '2.5rem 0 2rem' }}>
+          <p style={{ fontSize: '0.75rem', color: '#C8102E', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Your Plan</p>
+          <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 'clamp(1.8rem, 4vw, 2.5rem)', fontWeight: 700, lineHeight: 1.1, marginBottom: '0.5rem' }}>
+            6-Month Credit Roadmap
+          </h1>
+          <p style={{ color: '#555', fontSize: '0.9rem' }}>Follow each step in sequence. Consistency is the only strategy that works.</p>
         </div>
 
-        {/* Roadmap Cards */}
-        <div className="space-y-8">
-          {roadmap.map((month, index) => {
-            const isLocked = isMonthLocked(index);
-            const isComplete = isMonthComplete(month, completedItems);
-            // Active if not locked and not complete
-            const isActive = !isLocked && !isComplete;
+        {/* MONTHS */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {roadmap.map((month, idx) => {
+            const locked = isLocked(idx);
+            const done = isComplete(month, completedItems);
+            const active = !locked && !done;
 
             return (
-              <div 
-                key={month.monthNumber}
-                ref={(el) => { monthRefs.current[month.monthNumber] = el; }}
-                className={`
-                    rounded-xl border transition-all duration-300 relative overflow-hidden
-                    ${isLocked ? 'bg-slate-50 border-slate-200' : 'bg-white shadow-sm'}
-                    ${isActive ? 'border-canada-red ring-1 ring-canada-red ring-opacity-50 shadow-md transform scale-[1.01]' : ''}
-                    ${isComplete ? 'border-green-200' : ''}
-                `}
-              >
-                {/* Header */}
-                <div className={`
-                    px-6 py-4 flex justify-between items-center transition-colors duration-300
-                    ${isLocked ? 'bg-slate-100 text-slate-400' : ''}
-                    ${isActive ? 'bg-slate-900 text-white' : ''}
-                    ${isComplete ? 'bg-green-700 text-white' : ''}
-                `}>
-                    <div className="flex items-center">
-                        <span className="font-bold text-lg mr-3">Month {month.monthNumber}</span>
-                        {isLocked && <Lock className="h-5 w-5 opacity-70" />}
+              <div key={month.monthNumber} ref={el => { monthRefs.current[month.monthNumber] = el; }}
+                style={{
+                  background: '#141414',
+                  border: `1px solid ${done ? 'rgba(34,197,94,0.25)' : active ? 'rgba(200,16,46,0.35)' : 'rgba(255,255,255,0.05)'}`,
+                  borderRadius: 16, overflow: 'hidden',
+                  transition: 'all 0.3s ease',
+                  boxShadow: active ? '0 0 0 1px rgba(200,16,46,0.1)' : 'none',
+                }}>
+
+                {/* MONTH HEADER */}
+                <div style={{
+                  padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  background: done ? 'rgba(34,197,94,0.08)' : active ? 'rgba(200,16,46,0.08)' : 'rgba(255,255,255,0.02)',
+                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: done ? 'rgba(34,197,94,0.2)' : active ? 'rgba(200,16,46,0.2)' : 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: done ? '#22c55e' : active ? '#C8102E' : '#555' }}>
+                      {done ? <Check size={14} /> : locked ? <Lock size={12} /> : month.monthNumber}
                     </div>
-                    {isComplete && (
-                        <div className="flex items-center bg-white/20 px-2 py-1 rounded text-xs font-bold uppercase">
-                            <Check className="h-3 w-3 mr-1" /> Done
-                        </div>
-                    )}
+                    <span style={{ fontFamily: "'Playfair Display', serif", fontSize: '1rem', fontWeight: 700, color: locked ? '#444' : '#FAF7F2' }}>
+                      Month {month.monthNumber}
+                    </span>
+                    {active && <span style={{ fontSize: '0.7rem', color: '#C8102E', background: 'rgba(200,16,46,0.1)', padding: '0.2rem 0.6rem', borderRadius: 100, fontWeight: 600, letterSpacing: '0.05em' }}>ACTIVE</span>}
+                  </div>
+                  {done && <span style={{ fontSize: '0.7rem', color: '#22c55e', fontWeight: 600, letterSpacing: '0.08em' }}>COMPLETE</span>}
                 </div>
 
-                {/* Content */}
-                <div className="p-6 relative">
-                    <h3 className={`text-xl font-bold mb-4 transition-all duration-300 ${isLocked ? 'blur-md text-slate-400 select-none' : 'text-slate-800'}`}>
-                        {month.title}
-                    </h3>
-                    
-                    <div className={`space-y-3 transition-all duration-300 ${isLocked ? 'blur-md select-none pointer-events-none opacity-50' : ''}`}>
-                        {month.actions.map((action, idx) => {
-                            const isChecked = !!completedItems[action.id];
-                            return (
-                                <div 
-                                    key={action.id}
-                                    onClick={() => toggleItem(month.monthNumber, idx, action.id)}
-                                    className={`
-                                        flex items-start p-3 rounded-lg transition-all
-                                        ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50'}
-                                        ${isChecked ? 'bg-green-50' : ''}
-                                    `}
-                                >
-                                    <div className={`mt-0.5 mr-3 flex-shrink-0 transition-colors ${
-                                        isChecked ? 'text-green-600' : 'text-slate-300 group-hover:text-slate-400'
-                                    }`}>
-                                        {isChecked ? <CheckSquare className="h-6 w-6" /> : <Square className="h-6 w-6" />}
-                                    </div>
-                                    <span className={`text-base ${isChecked ? 'text-slate-500 line-through' : 'text-slate-700'}`}>
-                                        {action.text}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    {isLocked && (
-                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center top-14">
-                           <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-lg border border-slate-100 flex flex-col items-center text-center max-w-[80%]">
-                              <div className="bg-slate-100 p-3 rounded-full mb-3">
-                                <Lock className="h-6 w-6 text-slate-500" />
-                              </div>
-                              <h4 className="font-bold text-slate-800 mb-1">Step Locked</h4>
-                              <p className="text-sm text-slate-500">
-                                Complete Month {month.monthNumber - 1} to unlock this step.
-                              </p>
-                           </div>
+                {/* MONTH CONTENT */}
+                <div style={{ padding: '1.25rem 1.5rem', position: 'relative' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', color: locked ? '#333' : '#FAF7F2', filter: locked ? 'blur(5px)' : 'none', userSelect: locked ? 'none' : 'auto' }}>
+                    {month.title}
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', filter: locked ? 'blur(5px)' : 'none', pointerEvents: locked ? 'none' : 'auto', userSelect: locked ? 'none' : 'auto' }}>
+                    {month.actions.map((action, i) => {
+                      const checked = !!completedItems[action.id];
+                      return (
+                        <div key={action.id} onClick={() => toggleItem(month.monthNumber, i, action.id)}
+                          style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.75rem', borderRadius: 10, cursor: locked ? 'not-allowed' : 'pointer', background: checked ? 'rgba(34,197,94,0.06)' : 'transparent', transition: 'background 0.2s' }}>
+                          <div style={{ color: checked ? '#22c55e' : '#444', marginTop: 1, flexShrink: 0, transition: 'color 0.2s' }}>
+                            {checked ? <CheckSquare size={18} /> : <Square size={18} />}
+                          </div>
+                          <span style={{ fontSize: '0.875rem', color: checked ? '#555' : '#CCC', textDecoration: checked ? 'line-through' : 'none', lineHeight: 1.6 }}>
+                            {action.text}
+                          </span>
                         </div>
-                    )}
+                      );
+                    })}
+                  </div>
+
+                  {/* LOCK OVERLAY */}
+                  {locked && (
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ background: 'rgba(15,15,15,0.85)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '1.25rem 1.75rem', textAlign: 'center' }}>
+                        <Lock size={20} color="#444" style={{ margin: '0 auto 0.5rem' }} />
+                        <p style={{ fontSize: '0.8rem', color: '#555' }}>Complete Month {month.monthNumber - 1} to unlock</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                
-                {isActive && (
-                    <div className="absolute inset-0 pointer-events-none border-2 border-canada-red/40 rounded-xl animate-pulse"></div>
-                )}
               </div>
             );
           })}
         </div>
 
-        {/* Action Bar */}
-        <div className="flex flex-col md:flex-row gap-4 justify-center items-center mt-12 mb-8 print:hidden">
+        {/* ACTION ROW */}
+        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '3rem', flexWrap: 'wrap' }}>
           {!user && (
-            <Button size="lg" onClick={() => navigate('/signup')} className="w-full md:w-auto">
-              <Save className="mr-2 h-4 w-4" /> Save My Progress
-            </Button>
+            <button onClick={() => navigate('/signup')} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.875rem 1.5rem', background: '#C8102E', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+              <Save size={15} /> Save Progress
+            </button>
           )}
-          <Button variant="outline" size="lg" onClick={() => window.print()} className="w-full md:w-auto">
-            <Download className="mr-2 h-4 w-4" /> Download PDF
-          </Button>
-        </div>
-        
-        {/* Email Note */}
-        <div className="text-center text-xs text-slate-400 mt-4 flex items-center justify-center">
-           <BellRing className="h-3 w-3 mr-1" />
-           Email reminders will be sent once email is configured.
+          <button onClick={() => window.print()} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.875rem 1.5rem', background: 'transparent', color: '#FAF7F2', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500 }}>
+            <Download size={15} /> Download PDF
+          </button>
         </div>
       </div>
 
-      {/* Celebration Overlay */}
+      {/* CELEBRATION OVERLAY */}
       {showCelebration && celebration && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/95 backdrop-blur-sm animate-in fade-in duration-300">
-            <div className="text-center text-white px-4 max-w-lg">
-                <div className="flex justify-center mb-6">
-                    <div className="h-24 w-24 rounded-full bg-green-500 flex items-center justify-center shadow-lg shadow-green-500/50 animate-bounce-subtle">
-                        <Check className="h-12 w-12 text-white stroke-[3]" />
-                    </div>
-                </div>
-                <h2 className="text-4xl font-extrabold mb-4 animate-in slide-in-from-bottom-4 duration-500 delay-100">
-                    Month {celebration.month} Complete! 🎉
-                </h2>
-                <p className="text-xl text-green-100 mb-8 leading-relaxed animate-in slide-in-from-bottom-4 duration-500 delay-200">
-                    {getCelebrationText(celebration.month)}
-                </p>
-                <Button 
-                    size="lg" 
-                    onClick={handleDismissCelebration}
-                    className="bg-white text-green-700 hover:bg-green-50 border-none text-lg px-8 py-6 shadow-xl animate-in slide-in-from-bottom-4 duration-500 delay-300"
-                >
-                    {celebration.month === 6 ? "Go to Dashboard" : `Continue to Month ${celebration.month + 1}`}
-                    {celebration.month !== 6 && <ChevronRight className="ml-2 h-5 w-5" />}
-                </Button>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,15,15,0.97)', backdropFilter: 'blur(8px)' }}>
+          <div style={{ textAlign: 'center', padding: '2rem', maxWidth: 480 }}>
+            <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+              <Check size={36} color="#22c55e" strokeWidth={2.5} />
             </div>
+            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: '2.5rem', fontWeight: 700, marginBottom: '1rem' }}>
+              Month {celebration.month} Complete
+            </h2>
+            <p style={{ color: '#888', fontSize: '1.1rem', lineHeight: 1.7, marginBottom: '2rem' }}>
+              {celebrationText[celebration.month] || 'Step complete! Keep going.'}
+            </p>
+            <button onClick={handleDismiss} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.9rem 2rem', background: '#22c55e', color: 'white', border: 'none', borderRadius: 10, fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer' }}>
+              {celebration.month === 6 ? 'View Dashboard' : `Continue to Month ${celebration.month + 1}`}
+              {celebration.month !== 6 && <ChevronRight size={16} />}
+            </button>
+          </div>
         </div>
       )}
-
-      <style>{`
-        @keyframes bounce-subtle {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.1); }
-        }
-        .animate-bounce-subtle {
-          animation: bounce-subtle 2s infinite ease-in-out;
-        }
-      `}</style>
     </div>
   );
 };
