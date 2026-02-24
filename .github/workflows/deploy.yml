@@ -40,7 +40,7 @@ jobs:
 
       - name: Connect to GKE cluster
         run: |
-          gcloud container clusters get-credentials launch-path-cluster --zone northamerica-northeast1-a --project launch-path-canada
+          gcloud container clusters get-credentials gcloud-container-cluster --zone northamerica-northeast2-b --project launch-path-canada
 
       - name: Deploy new image to Kubernetes
         run: |
