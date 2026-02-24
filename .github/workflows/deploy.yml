@@ -24,6 +24,8 @@ jobs:
           docker build \
             --build-arg VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }} \
             --build-arg VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }} \
+            --build-arg VITE_PUBLIC_POSTHOG_KEY=${{ secrets.VITE_PUBLIC_POSTHOG_KEY }} \
+            --build-arg VITE_PUBLIC_POSTHOG_HOST=${{ secrets.VITE_PUBLIC_POSTHOG_HOST }} \
             -t soobz/launch-path-canada:${{ github.sha }} .
           docker push soobz/launch-path-canada:${{ github.sha }}
 
