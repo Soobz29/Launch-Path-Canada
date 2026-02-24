@@ -11,8 +11,8 @@ const options = {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <PostHogProvider 
-      apiKey={import.meta.env.VITE_PUBLIC_POSTHOG_KEY} 
+    <PostHogProvider
+      apiKey={import.meta.env.VITE_PUBLIC_POSTHOG_KEY}
       options={options}
     >
       <App />
